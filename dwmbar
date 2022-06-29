@@ -1,58 +1,44 @@
 #!/bin/sh
 
 update_hdd () { 
-	hdd="💽$(df -h | grep '/run/media' | awk '{ print $4 "/" $2 }')"
+	hdd="$(df -h | grep '/run/media' | awk '{ print $4 "/" $2 }')"
 }
 
 update_mem () { 
-	mem1="🧠$(free -h --kilo | awk '/^Mem:/ {print $3 "/" $2}')"
+	mem1="$(free -h --kilo | awk '/^Mem:/ {print $3 "/" $2}')"
 	mem2="$(free -t | awk 'NR == 2 {printf("%.0f%"), $3/$2*100}')"
 }
 
-update_cpu () { 
-	cpu1="🌡️$(head -c 2 /sys/class/thermal/thermal_zone0/temp)°C"
-	cpu2="$(top -bn 1 | awk '/^%Cpu/ {printf "%.f%%\n", $2+$4+$6}')"	
+update_cpu_usg () { 
+	cpu_usg="$(top -bn 1 | awk '/^%Cpu/ {printf "%.f%%\n", $2+$4+$6}')"	
+}
+
+update_cpu_temp () { 
+	cpu_temp="$(head -c 2 /sys/class/thermal/thermal_zone0/temp)°C"
 }
 
 update_bright () { 
-	level="$(xbacklight -get)"
-	printf "${level%%.*}%%"
+	bright="$(xbacklight -get | cut -f1 -d '.')%"
 }
 
 update_vol () { 
         muted="$(pactl list sinks | awk '/Mute:/ { print $2 }')"
 	vol="$(pamixer --get-volume)"
 	if [ "$muted" = "yes" ]; then
-		icon="🔇muted/"
+		icon="muted/"
 	else
 		if [ "$vol" -gt 75 ]; then
-			icon="🔊"
+			icon=""
 		elif [ "$vol" -gt 50 ]; then
-			icon="🔉"
+			icon=""
 		elif [ "$vol" -gt 0 ]; then
-			icon="🔈"	
+			icon=""	
 		fi
 	fi
 }
 
 update_time () { 
-	clock=$(date '+%I')
-case "$clock" in
-	"00") icon2="🕛" ;;
-	"01") icon2="🕐" ;;
-	"02") icon2="🕑" ;;
-	"03") icon2="🕒" ;;
-	"04") icon2="🕓" ;;
-	"05") icon2="🕔" ;;
-	"06") icon2="🕕" ;;
-	"07") icon2="🕖" ;;
-	"08") icon2="🕗" ;;
-	"09") icon2="🕘" ;;
-	"10") icon2="🕙" ;;
-	"11") icon2="🕚" ;;
-	"12") icon2="🕛" ;;
-esac
-	time="^c#bbbbbb^$(date "+%a %d.%m.%Y $icon2%R")"
+	time="$(date "+%a %d.%m.%Y %R")"
 }
 
 update_bat () { 
@@ -60,19 +46,19 @@ update_bat () {
 	read -r bat_status </sys/class/power_supply/BAT0/status
 	read -r bat_capacity </sys/class/power_supply/BAT0/capacity
 	if [ "$bat_status" = "Charging" ]; then
-		bat_status="⚡"
+		bat_status=""
 	elif [ "$bat_status" = "Full" ]; then
-		bat_status="^c#00ff00^🔋"
+		bat_status=""
 	elif [ "$bat_capacity" -gt 80 ]; then
-		bat_status="^c#00cd00^"
+		bat_status=""
 	elif [ "$bat_capacity" -gt 60 ]; then
-		bat_status="^c#00cdcd^"
+		bat_status=""
 	elif [ "$bat_capacity" -gt 40 ]; then
-		bat_status="^c#cdcd00^"
+		bat_status=""
 	elif [ "$bat_capacity" -gt 25 ]; then
-		bat_status="^c#cd0000^"
+		bat_status=""
 	else 
-		bat_status="^c#ff0000^❗"
+		bat_status=""
 	fi
 	bat="$bat_status$bat_capacity%"
 }
@@ -80,17 +66,17 @@ update_bat () {
 update_wifi () {
 	read -r wifi_status </sys/class/net/wlan0/operstate 
         if [ "$wifi_status" = "down" ]; then
-		wifi_status="📡wifi down"
+		wifi_status="wifi down"
 	elif [ "$wifi_status" = "up" ]; then	 
-		wifi_status="📶$(nmcli -g IN-USE,SSID,SIGNAL device wifi | awk '/^*/' | awk -F '[:]' '{print $2 "("$3"%)"}')"
+		wifi_status="$(nmcli -g IN-USE,SSID,SIGNAL device wifi | awk '/^*/' | awk -F '[:]' '{print $2 "("$3"%)"}') $(ip route get 1.2.3.4 | awk '/ via / {print $3; exit;}')"
 	else
-		wifi_status="❌no wifi"
+		wifi_status="no wifi"
 	fi
-	wifi="^c#bbbbbb^$wifi_status"
+	wifi="$wifi_status"
 }
 
 display () { 
-	xsetroot -name "$hdd $mem1($mem2) $cpu1($cpu2) 🔆${level%%.*}% $icon$vol% $time $wifi"
+	xsetroot -name "$hdd $mem1($mem2) $cpu_usg $cpu_temp $bright $icon$vol% $time $wifi"
 }
 
 while true
@@ -101,7 +87,8 @@ do
 		## [ $((sec % n)) -eq m ] && udpate_item
 		[ $((sec % 18)) -eq 0 ] && update_hdd		
 		[ $((sec % 16)) -eq 0 ] && update_mem
-		[ $((sec % 14)) -eq 0 ] && update_cpu
+		[ $((sec % 14)) -eq 0 ] && update_cpu_usg
+		[ $((sec % 15)) -eq 0 ] && update_cpu_temp		
 		[ $((sec % 7)) -eq 0 ] && update_bright
 		[ $((sec % 5)) -eq 0 ] && update_vol							
 #		[ $((sec % 10 )) -eq 0 ] && update_bat
